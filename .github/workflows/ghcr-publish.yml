@@ -6,8 +6,6 @@ on:
 
 env:
   REGISTRY: ghcr.io
-  # Opt-in to Node.js 24 to silence deprecation warnings
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
   build-and-push-mosquitto:
@@ -18,23 +16,26 @@ jobs:
       packages: write
 
     steps:
+      # v6 ya corre nativamente en Node 24
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Set lowercase image name
         run: |
           echo "IMAGE_NAME=${GITHUB_REPOSITORY,,}" >> ${GITHUB_ENV}
 
+      # v4 es la versión actual para el login
       - name: Log in to the Container registry
-        uses: docker/login-action@v3
+        uses: docker/login-action@v4
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      # v6 para la extracción de metadatos
       - name: Extract metadata (tags, labels) for Docker
         id: meta
-        uses: docker/metadata-action@v5
+        uses: docker/metadata-action@v6
         with:
           images: |
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-broker
@@ -42,8 +43,9 @@ jobs:
             type=sha
             type=raw,value=latest
 
+      # v6 para el build y push
       - name: Build and push Docker image
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v6
         with:
           context: ./infra/mosquitto
           push: true
