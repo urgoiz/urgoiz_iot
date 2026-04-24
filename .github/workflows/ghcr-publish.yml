@@ -6,119 +6,73 @@ on:
 
 env:
   REGISTRY: ghcr.io
+  # Force Node 24 to avoid deprecation warnings in 2026
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
+  # JOB 1: Compile the Rust Gateway using our custom builder image
   build-rust:
     runs-on: ubuntu-latest
+    container:
+      # Using the custom image we pushed earlier
+      image: ghcr.io/urgoiz/rust-builder:latest
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Install Rust toolchain
-        run: rustup update stable && rustup default stable
-
-      # Compilamos en modo RELEASE (optimizado y listo para otros PCs)
+      # Build the application in release mode (optimized)
       - name: Build release binary
         run: cargo build --release --workspace
 
-      # Este paso "cuelga" el archivo en la web de GitHub
+      # Store the binary so it can be downloaded from the "Actions" tab
       - name: Upload Gateway Binary
         uses: actions/upload-artifact@v4
         with:
           name: gateway-binary
           path: target/release/gateway
 
+  # JOB 2: Build and publish the Mosquitto Broker image
   publish-mosquitto:
-    # ... (el resto del código de mosquitto se queda igual)
     runs-on: ubuntu-latest
     permissions:
       contents: read
       packages: write
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+
+      # Helper step to ensure the image name is lowercase (required by GHCR)
       - name: Set lowercase image name
-        run: echo "IMAGE_NAME=${GITHUB_REPOSITORY,,}" >> ${GITHUB_ENV}
-      - name: Log in to GHCR
+        run: |
+          echo "IMAGE_NAME=${GITHUB_REPOSITORY,,}" >> ${GITHUB_ENV}
+
+      - name: Log in to the Container Registry
         uses: docker/login-action@v3
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      - name: Extract metadata
+
+      - name: Extract Docker metadata
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-broker
+          images: |
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-broker
           tags: |
             type=sha
             type=raw,value=latest
-      - name: Build and push
-        uses: docker/build-push-action@v6
-        with:
-          context: ./infra/mosquitto
-          push: true
-          name: CI/CD Infrastructure and Apps
 
-on:
-  push:
-    branches: [ "main" ]
-
-env:
-  REGISTRY: ghcr.io
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
-
-jobs:
-  build-rust:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Install Rust toolchain
-        run: rustup update stable && rustup default stable
-
-      # Compilamos en modo RELEASE (optimizado y listo para otros PCs)
-      - name: Build release binary
-        run: cargo build --release --workspace
-
-      # Este paso "cuelga" el archivo en la web de GitHub
-      - name: Upload Gateway Binary
-        uses: actions/upload-artifact@v4
-        with:
-          name: gateway-binary
-          path: target/release/gateway
-
-  publish-mosquitto:
-    # ... (el resto del código de mosquitto se queda igual)
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      packages: write
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-      - name: Set lowercase image name
-        run: echo "IMAGE_NAME=${GITHUB_REPOSITORY,,}" >> ${GITHUB_ENV}
-      - name: Log in to GHCR
-        uses: docker/login-action@v3
-        with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-      - name: Extract metadata
-        id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-broker
-          tags: |
-            type=sha
-            type=raw,value=latest
-      - name: Build and push
+      # Build the Mosquitto image using the Dockerfile in infra/mosquitto
+      - name: Build and push Mosquitto image
         uses: docker/build-push-action@v6
         with:
           context: ./infra/mosquitto
           push: true
           tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.output.labels }}
+          labels: ${{ steps.meta.outputs.labels }}
