@@ -9,7 +9,6 @@ env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
-  # JOB 1: Compile and verify Rust
   build-rust:
     runs-on: ubuntu-latest
     steps:
@@ -19,50 +18,42 @@ jobs:
       - name: Install Rust toolchain
         run: rustup update stable && rustup default stable
 
-      - name: Rust Cache
-        uses: actions/cache@v4
+      # Compilamos en modo RELEASE (optimizado y listo para otros PCs)
+      - name: Build release binary
+        run: cargo build --release --workspace
+
+      # Este paso "cuelga" el archivo en la web de GitHub
+      - name: Upload Gateway Binary
+        uses: actions/upload-artifact@v4
         with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            target
-          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          name: gateway-binary
+          path: target/release/gateway
 
-      - name: Check compilation
-        run: cargo check --workspace
-
-  # JOB 2: Build and publish Mosquitto images
   publish-mosquitto:
+    # ... (el resto del código de mosquitto se queda igual)
     runs-on: ubuntu-latest
     permissions:
       contents: read
       packages: write
-
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-
       - name: Set lowercase image name
-        run: |
-          echo "IMAGE_NAME=${GITHUB_REPOSITORY,,}" >> ${GITHUB_ENV}
-
+        run: echo "IMAGE_NAME=${GITHUB_REPOSITORY,,}" >> ${GITHUB_ENV}
       - name: Log in to GHCR
         uses: docker/login-action@v3
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-
       - name: Extract metadata
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: |
-            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-broker
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-broker
           tags: |
             type=sha
             type=raw,value=latest
-
       - name: Build and push
         uses: docker/build-push-action@v6
         with:
