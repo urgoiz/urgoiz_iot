@@ -1,0 +1,24 @@
+# Rust
+target/
+**/*.rs.bk
+Cargo.lock
+
+#Python
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+ENV/
+
+#Docker & Infra
+.env
+*.log
+data/
+mosquitto/data/
+mosquitto/log/
+
+#IDEs
+.vscode/
+.idea/
+.DS_Store
