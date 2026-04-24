@@ -6,6 +6,8 @@ on:
 
 env:
   REGISTRY: ghcr.io
+  # Opt-in to Node.js 24 to silence deprecation warnings
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
   build-and-push-mosquitto:
@@ -19,7 +21,6 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # Docker requires lowercase names. This safely downcases your repo name.
       - name: Set lowercase image name
         run: |
           echo "IMAGE_NAME=${GITHUB_REPOSITORY,,}" >> ${GITHUB_ENV}
@@ -35,7 +36,6 @@ jobs:
         id: meta
         uses: docker/metadata-action@v5
         with:
-          # Using the pipe (|) makes this a safe multiline string for YAML
           images: |
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-broker
           tags: |
