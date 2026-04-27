@@ -1,3 +1,4 @@
+mod domain;
 mod sensor_parser;
 mod mqtt_handler;
 

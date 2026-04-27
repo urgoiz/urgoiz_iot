@@ -1,16 +1,4 @@
-#[derive(Debug, PartialEq)]
-pub enum SensorType {
-    Temperature,
-    Humidity,
-    Pressure,
-    Unknown,
-}
-
-#[derive(Debug, PartialEq)]
-pub struct SensorData {
-    pub sensor_type: SensorType,
-    pub value: f64,
-}
+use crate::domain::{SensorData, SensorType};
 
 pub fn parse_sensor_data(topic_path: &str, payload: &str) -> Option<SensorData> {
     let sensor_str = topic_path.split('/').last().unwrap_or("");
