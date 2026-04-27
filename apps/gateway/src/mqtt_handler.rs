@@ -1,6 +1,6 @@
-use crate::domain::{SensorData, SensorType};
+use crate::domain::{SensorData};
 
-fn handle_mqtt_message(
+pub fn handle_mqtt_message(
     topic: &str,
     payload: &str,
     parser_fn: fn(&str, &str) -> Option<SensorData>,
