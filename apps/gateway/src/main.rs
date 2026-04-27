@@ -1,7 +1,5 @@
-fn main() {
-    println!("--- Garden IoT Gateway ---");
-    println!("Starting the gateway...");
+mod parser;
 
-    // Here we will connect to mosquitto
-    println!("Result: Ready to receive data.");
+fn main() {
+    println!("IoT Gateway is running...");
 }
