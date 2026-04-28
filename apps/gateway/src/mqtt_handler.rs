@@ -15,6 +15,7 @@ pub fn handle_mqtt_message(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::domain::SensorType;
 
     fn mock_success_parser(_topic: &str, _payload: &str) -> Option<SensorData> {
         Some(SensorData {
