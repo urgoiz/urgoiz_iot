@@ -1,14 +1,14 @@
-use crate::domain::{SensorData};
+use crate::domain::{SensorData, SensorError};
 
 pub fn handle_mqtt_message(
     topic: &str,
     payload: &str,
-    parser_fn: fn(&str, &str) -> Option<SensorData>,
+    parser_fn: fn(&str, &str) -> Result<SensorData, SensorError>,
 ) -> Result<SensorData, String> {
     
     match parser_fn(topic, payload) {
-        Some(data) => Ok(data),
-        None => Err(format!("Failed to parse sensor data from topic: {}", topic)),
+        Ok(data) => Ok(data),
+        Err(e) => Err(format!("Failed to parse sensor data from topic: {} | Reason: {:?}", topic, e)),
     }
 }
 
@@ -17,15 +17,15 @@ mod tests {
     use super::*;
     use crate::domain::SensorType;
 
-    fn mock_success_parser(_topic: &str, _payload: &str) -> Option<SensorData> {
-        Some(SensorData {
+    fn mock_success_parser(_topic: &str, _payload: &str) -> Result<SensorData, SensorError> {
+        Ok(SensorData {
             sensor_type: SensorType::Temperature,
             value: 22.5,
         })
     }
 
-    fn mock_fail_parser(_topic: &str, _payload: &str) -> Option<SensorData> {
-        None
+    fn mock_fail_parser(_topic: &str, _payload: &str) -> Result<SensorData, SensorError> {
+        Err(SensorError::InvalidPayload("Cannot parse".to_string()))
     }
 
     #[test]
@@ -48,7 +48,7 @@ mod tests {
 
         let result = handle_mqtt_message(topic, payload, mock_fail_parser);
 
-        let expected_error = format!("Failed to parse sensor data from topic: {}", topic);
+        let expected_error = format!("Failed to parse sensor data from topic: {} | Reason: {:?}", topic, SensorError::InvalidPayload("Cannot parse".to_string()));
 
         assert_eq!(result, Err(expected_error));
     }

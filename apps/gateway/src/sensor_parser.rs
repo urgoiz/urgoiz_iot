@@ -1,4 +1,4 @@
-use crate::domain::{SensorData, SensorType};
+use crate::domain::{SensorData, SensorError, SensorType};
 use serde::Deserialize;
 
 #[derive(Deserialize)]
@@ -6,26 +6,34 @@ struct SensorPayload {
     value: f64,
 }
 
-pub fn parse_sensor_data(topic_path: &str, payload: &str) -> Option<SensorData> {
-    let sensor_str = topic_path.split('/').last().unwrap_or("");
+pub fn parse_sensor_data(topic_path: &str, payload: &str) -> Result<SensorData, SensorError> {
+    let sensor_type = extract_sesor_type(topic_path)?;
+    let value = extract_value(payload)?;
 
-    let sensor_type = match sensor_str {
-        "temperature" => SensorType::Temperature,
-        "humidity" => SensorType::Humidity,
-        "pressure" => SensorType::Pressure,
-        _ => SensorType::Unknown,
-    };
-
-    let parsed_value = if let Ok(json_data) = serde_json::from_str::<SensorPayload>(payload) {
-        json_data.value
-    } else {
-        payload.parse::<f64>().ok()?
-    };
-
-    Some(SensorData {
+    Ok(SensorData {
         sensor_type,
-        value: parsed_value,
+        value,
     })
+}
+
+fn extract_sesor_type(topic_path: &str) -> Result<SensorType, SensorError> {
+    match topic_path.split('/').last() {
+        Some("temperature") => Ok(SensorType::Temperature),
+        Some("humidity") => Ok(SensorType::Humidity),
+        Some("pressure") => Ok(SensorType::Pressure),
+        Some(_) => Ok(SensorType::Unknown),
+        None => Err(SensorError::InvalidTopic("Invalid topic path".to_string())),
+    }
+}
+
+fn extract_value(payload: &str) -> Result<f64, SensorError> {
+    if let Ok(sensor_payload) = serde_json::from_str::<SensorPayload>(payload) {
+        Ok(sensor_payload.value)
+    } else if let Ok(float_val) = payload.parse::<f64>() {
+        Ok(float_val)
+    } else {
+        Err(SensorError::InvalidPayload(format!("Cannot parse: '{}'", payload)))
+    }
 }
 
 #[cfg(test)]
@@ -39,12 +47,12 @@ mod tests {
 
         let result = parse_sensor_data(raw_topic, raw_payload);
 
-        let expected = Some(SensorData {
+        let expected = SensorData {
             sensor_type: SensorType::Humidity,
             value: 65.5,
-        });
+        };
 
-        assert_eq!(result, expected);
+        assert_eq!(result, Ok(expected));
     }
 
     #[test]
@@ -54,7 +62,7 @@ mod tests {
 
         let result = parse_sensor_data(raw_topic, raw_payload);
 
-        assert_eq!(result, None);
+        assert_eq!(result, Err(SensorError::InvalidPayload("Cannot parse: 'sensor_error'".to_string())));
     }
 
     #[test]
@@ -64,12 +72,12 @@ mod tests {
 
         let result = parse_sensor_data(raw_topic, raw_payload);
 
-        let expected = Some(SensorData {
+        let expected = SensorData {
             sensor_type: SensorType::Unknown,
             value: 150.0,
-        });
+        };
 
-        assert_eq!(result, expected);
+        assert_eq!(result, Ok(expected));
     }
 
     #[test]
@@ -79,11 +87,11 @@ mod tests {
 
         let result = parse_sensor_data(raw_topic, raw_payload);
 
-        let expected = Some(SensorData {
+        let expected = SensorData {
             sensor_type: SensorType::Temperature,
             value: 22.5,
-        });
+        };
 
-        assert_eq!(result, expected);
+        assert_eq!(result, Ok(expected));
     }
 }
