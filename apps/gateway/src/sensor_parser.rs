@@ -17,15 +17,14 @@ impl From<proto::SensorType> for DomainSensorType {
 }
 
 pub fn parse_sensor_protobuf(_payload: &[u8]) -> Result<SensorData, SensorError> {
-    let proto_reading = proto::SensorReading::decode(_payload)
-        .map_err(|e| SensorError::InvalidPayload(format!("Protobuf decode error: {}", e)))?;
+    let proto_reading = proto::SensorReading::decode(_payload)?;
 
     let sensor_type : DomainSensorType = proto::SensorType::try_from(proto_reading.r#type)
         .map(DomainSensorType::from)
         .unwrap_or(DomainSensorType::Unknown);
 
     if sensor_type == DomainSensorType::Unknown {
-        return Err(SensorError::InvalidTopic("Sensor type not allowed by schema".to_string()));
+        return Err(SensorError::InvalidPayload("Invalid sensor type value in protobuf".to_string()));
     }
 
     Ok(SensorData {

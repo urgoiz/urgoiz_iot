@@ -16,6 +16,11 @@ pub struct SensorData {
 
 #[derive(Debug, PartialEq)]
 pub enum SensorError {
-    InvalidTopic(String),
     InvalidPayload(String),
+}
+
+impl From<DecodeError> for SensorError {
+    fn from(err: DecodeError) -> Self {
+        SensorError::InvalidPayload(format!("Protobuf decode error: {}", err))
+    }
 }
