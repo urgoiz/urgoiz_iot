@@ -2,11 +2,11 @@ use crate::domain::{SensorData, SensorError};
 
 pub fn handle_mqtt_message(
     topic: &str,
-    payload: &str,
-    parser_fn: fn(&str, &str) -> Result<SensorData, SensorError>,
+    payload: &[u8],
+    parser_fn: fn(&[u8]) -> Result<SensorData, SensorError>,
 ) -> Result<SensorData, String> {
     
-    match parser_fn(topic, payload) {
+    match parser_fn(payload) {
         Ok(data) => Ok(data),
         Err(e) => Err(format!("Failed to parse sensor data from topic: {} | Reason: {:?}", topic, e)),
     }
@@ -17,21 +17,21 @@ mod tests {
     use super::*;
     use crate::domain::SensorType;
 
-    fn mock_success_parser(_topic: &str, _payload: &str) -> Result<SensorData, SensorError> {
+    fn mock_success_parser(_payload: &[u8]) -> Result<SensorData, SensorError> {
         Ok(SensorData {
             sensor_type: SensorType::Temperature,
             value: 22.5,
         })
     }
 
-    fn mock_fail_parser(_topic: &str, _payload: &str) -> Result<SensorData, SensorError> {
+    fn mock_fail_parser(_payload: &[u8]) -> Result<SensorData, SensorError> {
         Err(SensorError::InvalidPayload("Cannot parse".to_string()))
     }
 
     #[test]
     fn test_handle_valid_message_with_injected_parser() {
 
-        let result = handle_mqtt_message("any/topic", "any_payload", mock_success_parser);
+        let result = handle_mqtt_message("any/topic", b"any_payload", mock_success_parser);
 
         let expected = Ok(SensorData {
             sensor_type: SensorType::Temperature,
@@ -44,9 +44,8 @@ mod tests {
     #[test]
     fn test_handle_invalid_message_with_injected_parser() {
         let topic = "garden/sensors/humidity";
-        let payload = "error_reading";
 
-        let result = handle_mqtt_message(topic, payload, mock_fail_parser);
+        let result = handle_mqtt_message(topic, b"error_reading", mock_fail_parser);
 
         let expected_error = format!("Failed to parse sensor data from topic: {} | Reason: {:?}", topic, SensorError::InvalidPayload("Cannot parse".to_string()));
 

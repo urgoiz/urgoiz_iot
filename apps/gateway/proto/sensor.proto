@@ -1,0 +1,15 @@
+syntax = "proto3";
+
+package iot;
+
+enum SensorType {
+    UNKNOWN = 0;
+    TEMPERATURE = 1;
+    HUMIDITY = 2;
+    PRESSURE = 3;
+}
+
+message SensorReading {
+    SensorType type = 1;
+    double value = 2;
+}

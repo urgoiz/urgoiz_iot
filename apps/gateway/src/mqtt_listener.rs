@@ -3,7 +3,7 @@ use std::time::Duration;
 
 use crate::domain::SensorData;
 use crate::mqtt_handler::handle_mqtt_message;
-use crate::sensor_parser::parse_sensor_data;
+use crate::sensor_parser::parse_sensor_protobuf;
 
 pub async fn setup_mqtt_client(client_id: &str, host: &str, port: u16) -> (AsyncClient, EventLoop) {
     let mut mqttoptions = MqttOptions::new(client_id, host, port);
@@ -38,10 +38,7 @@ pub async fn run_event_loop(mut event: EventLoop) {
 pub fn process_packet(packet: Publish) -> Result<SensorData, String> {
     let topic = packet.topic;
 
-    let payload_str = String::from_utf8(packet.payload.to_vec())
-        .map_err(|_| format!("Error: Payload in topic '{}' is not valid UTF-8", topic))?;
-
-    handle_mqtt_message(&topic, &payload_str, parse_sensor_data)
+    handle_mqtt_message(&topic, &packet.payload, parse_sensor_protobuf)
 }
 
 #[cfg(test)]
@@ -50,16 +47,25 @@ mod tests {
     use rumqttc::QoS;
     use bytes::Bytes;
     use crate::domain::SensorType;
+    use crate::sensor_parser::proto;
+    use prost::Message;
 
     #[test]
     fn test_process_valid_packet() {
-            let packet = Publish {
+        let msg = proto::SensorReading {
+            r#type: proto::SensorType::Temperature as i32,
+            value: 25.5,
+        };
+        let mut buf = Vec::new();
+        msg.encode(&mut buf).unwrap();
+
+        let packet = Publish {
             dup: false,
             retain: false,
             qos: QoS::AtMostOnce,
             topic: "garden/sensors/temperature".to_string(),
             pkid: 0,
-            payload: Bytes::from("25.5"),
+            payload: Bytes::from(buf),
         };
 
         let result = process_packet(packet);
@@ -88,6 +94,6 @@ mod tests {
         let result = process_packet(packet);
 
         assert!(result.is_err());
-        assert!(result.err().unwrap().contains("not valid UTF-8"));
+        assert!(result.err().unwrap().contains("Protobuf decode error"));
     }
 }
