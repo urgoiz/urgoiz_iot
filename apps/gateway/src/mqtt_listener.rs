@@ -36,9 +36,9 @@ pub async fn run_event_loop(mut event: EventLoop) {
 }
 
 pub fn process_packet(packet: Publish) -> Result<SensorData, String> {
-    let topic = packet.topic;
+    println!("Received MQTT message on topic: {}", packet.topic);
 
-    handle_mqtt_message(&topic, &packet.payload, parse_sensor_protobuf)
+    handle_mqtt_message(&packet.payload, parse_sensor_protobuf)
 }
 
 #[cfg(test)]
@@ -63,7 +63,7 @@ mod tests {
             dup: false,
             retain: false,
             qos: QoS::AtMostOnce,
-            topic: "garden/sensors/temperature".to_string(),
+            topic: "irrelevant".to_string(),
             pkid: 0,
             payload: Bytes::from(buf),
         };
@@ -86,7 +86,7 @@ mod tests {
             dup: false,
             retain: false,
             qos: QoS::AtMostOnce,
-            topic: "garden/sensors/humidity".to_string(),
+            topic: "irrelevant".to_string(),
             pkid: 0,
             payload: Bytes::from(vec![0xFF, 0xFE, 0xFD]), // Invalid UTF-8 sequence
         };
