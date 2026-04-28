@@ -1,3 +1,5 @@
+use prost::DecodeError;
+
 #[derive(Debug, PartialEq)]
 pub enum SensorType {
     Temperature,
