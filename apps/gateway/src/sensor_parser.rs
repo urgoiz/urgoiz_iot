@@ -5,17 +5,24 @@ pub mod proto {
     include!(concat!(env!("OUT_DIR"), "/iot.rs"));
 }
 
+impl From<proto::SensorType> for DomainSensorType {
+    fn from(proto_type: proto::SensorType) -> Self {
+        match proto_type {
+            proto::SensorType::Temperature => DomainSensorType::Temperature,
+            proto::SensorType::Humidity => DomainSensorType::Humidity,
+            proto::SensorType::Pressure => DomainSensorType::Pressure,
+            _ => DomainSensorType::Unknown,
+        }
+    }
+}
+
 pub fn parse_sensor_protobuf(_payload: &[u8]) -> Result<SensorData, SensorError> {
     let proto_reading = proto::SensorReading::decode(_payload)
         .map_err(|e| SensorError::InvalidPayload(format!("Protobuf decode error: {}", e)))?;
 
-    let sensor_type = match proto::SensorType::try_from(proto_reading.r#type) {
-        Ok(proto::SensorType::Unknown) => DomainSensorType::Unknown,
-        Ok(proto::SensorType::Temperature) => DomainSensorType::Temperature,
-        Ok(proto::SensorType::Humidity) => DomainSensorType::Humidity,
-        Ok(proto::SensorType::Pressure) => DomainSensorType::Pressure,
-        _ => DomainSensorType::Unknown,
-    };
+    let sensor_type : DomainSensorType = proto::SensorType::try_from(proto_reading.r#type)
+        .map(DomainSensorType::from)
+        .unwrap_or(DomainSensorType::Unknown);
 
     if sensor_type == DomainSensorType::Unknown {
         return Err(SensorError::InvalidTopic("Sensor type not allowed by schema".to_string()));

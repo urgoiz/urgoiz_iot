@@ -2,9 +2,10 @@ FROM rust:slim
 
 # Install tools needed for MQTT and SSL
 RUN apt-get update && apt-get install -y \
-    pkg-config \
-    libssl-dev \
-    build-essential \
-    && rm -rf /var/lib/apt/lists/*
+	protobuf-compiler \
+	pkg-config \
+	libssl-dev \
+	build-essential \
+	&& rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
