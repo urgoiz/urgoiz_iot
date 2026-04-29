@@ -20,3 +20,4 @@ COPY apps/gateway/Cargo.toml ./apps/gateway/
 
 RUN cargo build --release
 RUN rm -rf apps/gateway/src
+
