@@ -1,8 +1,8 @@
-use rumqttc::{AsyncClient, Event, EventLoop, MqttOptions, Packet, Publish, QoS};
+use rumqttc::{AsyncClient, Event, EventLoop, MqttOptions, Packet, QoS};
 use std::time::Duration;
 
-use crate::domain::SensorData;
-use crate::mqtt_handler::handle_mqtt_message;
+use crate::domain::SensorRepository;
+use crate::mqtt_handler::MqttHandler;
 use crate::sensor_parser::parse_sensor_protobuf;
 
 pub async fn setup_mqtt_client(client_id: &str, host: &str, port: u16) -> (AsyncClient, EventLoop) {
@@ -17,13 +17,16 @@ pub async fn setup_mqtt_client(client_id: &str, host: &str, port: u16) -> (Async
     (client, eventloop)
 }
 
-pub async fn run_event_loop(mut event: EventLoop) {
+pub async fn run_event_loop<R: SensorRepository>(
+    mut event: EventLoop,
+    handler: MqttHandler<R>,) {
     loop {
         match event.poll().await {
             Ok(Event::Incoming(Packet::Publish(packet))) => {
-                match process_packet(packet) {
-                    Ok(data) => println!("SUCCESS | Sensor: {:?} | Value: {}", data.sensor_type, data.value),
-                    Err(e) => eprintln!("ERROR | {}", e),
+                if let Err(e) = handler.handle_message(&packet.payload, parse_sensor_protobuf).await {
+                    eprintln!("ERROR | {}", e);
+                } else {
+                    println!("SUCCESS | Message processed and stored.");
                 }
             }
             Ok(_) => {}
@@ -35,23 +38,35 @@ pub async fn run_event_loop(mut event: EventLoop) {
     }
 }
 
-pub fn process_packet(packet: Publish) -> Result<SensorData, String> {
-    println!("Received MQTT message on topic: {}", packet.topic);
-
-    handle_mqtt_message(&packet.payload, parse_sensor_protobuf)
-}
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use rumqttc::QoS;
-    use bytes::Bytes;
-    use crate::domain::SensorType;
+    use std::sync::{Arc, Mutex};
+    use async_trait::async_trait;
+    use crate::domain::{SensorData, SensorError, SensorType};
     use crate::sensor_parser::proto;
     use prost::Message;
 
-    #[test]
-    fn test_process_valid_packet() {
+    struct MockRepo{
+        data: Arc<Mutex<Vec<SensorData>>>,
+    }
+
+    #[async_trait]
+    impl SensorRepository for MockRepo {
+        async fn save_reading(&self, data: SensorData) -> Result<(), SensorError> {
+            self.data.lock().unwrap().push(data);
+            Ok(())
+        }
+    }
+
+    #[tokio::test]
+    async fn test_event_loop_processing_flow() {
+
+        let save_data = Arc::new(Mutex::new(vec![]));
+        let repo = MockRepo { data: save_data.clone() };
+        let handler = MqttHandler::new(repo);
+
         let msg = proto::SensorReading {
             r#type: proto::SensorType::Temperature as i32,
             value: 25.5,
@@ -59,41 +74,29 @@ mod tests {
         let mut buf = Vec::new();
         msg.encode(&mut buf).unwrap();
 
-        let packet = Publish {
-            dup: false,
-            retain: false,
-            qos: QoS::AtMostOnce,
-            topic: "irrelevant".to_string(),
-            pkid: 0,
-            payload: Bytes::from(buf),
-        };
-
-        let result = process_packet(packet);
+        let result = handler.handle_message(&buf, parse_sensor_protobuf).await;
 
         assert!(result.is_ok());
-        let expected = Ok(SensorData {
-            sensor_type: SensorType::Temperature,
-            value: 25.5,
-        });
+        let _final_data = save_data.lock().unwrap();
 
-        assert_eq!(result, expected);
+        assert_eq!(_final_data.len(), 1);
+        assert_eq!(_final_data[0].sensor_type, SensorType::Temperature);
+        assert_eq!(_final_data[0].value, 25.5);
     }
 
-    #[test]
-    fn test_process_packet_with_invalid_utf8_payload() {
+    #[tokio::test]
+    async fn test_hander_integration_in_listener_scope() {
 
-        let packet = Publish {
-            dup: false,
-            retain: false,
-            qos: QoS::AtMostOnce,
-            topic: "irrelevant".to_string(),
-            pkid: 0,
-            payload: Bytes::from(vec![0xFF, 0xFE, 0xFD]), // Invalid UTF-8 sequence
-        };
+        let save_data = Arc::new(Mutex::new(vec![]));
+        let repo = MockRepo { data: save_data.clone() };
+        let handler = MqttHandler::new(repo);
 
-        let result = process_packet(packet);
+        let payload = vec![0, 8, 204, 204, 204, 61]; // Invalid protobuf payload
+
+        let result = handler.handle_message(&payload, parse_sensor_protobuf).await;
 
         assert!(result.is_err());
-        assert!(result.err().unwrap().contains("Protobuf decode error"));
+        let _final_data = save_data.lock().unwrap();
+        assert_eq!(_final_data.len(), 0); // No data should be saved due
     }
 }
