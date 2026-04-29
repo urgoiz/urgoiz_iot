@@ -13,7 +13,7 @@ jobs:
   build-rust:
     runs-on: ubuntu-latest
     container:
-      image: ghcr.io/\${{ github.repository_owner }}/rust-builder:latest
+      image: ghcr.io/${{ github.repository_owner }}/rust-builder:latest
       credentials:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
@@ -28,12 +28,6 @@ jobs:
       - name: Run Tests
         run: cargo test --workspace --release
 
-      - name: Upload Gateway Binary
-        uses: actions/upload-artifact@v4
-        with:
-          name: gateway-binary
-          path: target/release/gateway
-
   publish-mosquitto:
     runs-on: ubuntu-latest
     permissions:
@@ -41,14 +35,12 @@ jobs:
       packages: write
     steps:
       - uses: actions/checkout@v4
-      
       - name: Log in to GHCR
         uses: docker/login-action@v3
         with:
-          registry: ${{ env.REGISTRY }}
+          registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-          
       - name: Build and push Mosquitto
         uses: docker/build-push-action@v6
         with:
