@@ -10,11 +10,11 @@ RUN apt-get update && apt-get install -y \
 
 WORKDIR /usr/src/app
 
-RUN cargo new --bin dummy_app
-WORKDIR /usr/src/app/dummy_app
+RUN mkdir -p apps/gateway/src && \
+	echo "fn main() {println!(\"dummy\"); }" > apps/gateway/src/main.rs
 
 COPY Cargo.toml Cargo.lock ./
 COPY apps/gateway/Cargo.toml ./apps/gateway/
 
 RUN cargo build --release
-RUN rm -rf src/
+RUN rm -rf apps/gateway/src
