@@ -13,7 +13,7 @@ WORKDIR /usr/src/app
 RUN mkdir -p apps/gateway/src && \
 	echo "fn main() {println!(\"dummy\"); }" > apps/gateway/src/main.rs
 
-COPY Cargo.toml Cargo.lock ./
+COPY Cargo.toml Cargo.lock* ./
 COPY apps/gateway/Cargo.toml ./apps/gateway/
 
 RUN cargo build --release
