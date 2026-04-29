@@ -1,6 +1,5 @@
 FROM rust:slim
 
-# Install tools needed for MQTT and SSL
 RUN apt-get update && apt-get install -y \
 	protobuf-compiler \
 	pkg-config \
