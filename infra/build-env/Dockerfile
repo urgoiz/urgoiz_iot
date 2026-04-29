@@ -1,5 +1,7 @@
 FROM rust:slim
 
+LABEL org.opencontainers.image.source=https://github.com/urgoiz/urgoiz_iot
+
 RUN apt-get update && apt-get install -y \
 	protobuf-compiler \
 	pkg-config \
