@@ -1,6 +1,8 @@
 use crate::domain::{SensorData, SensorError, SensorRepository, SensorType};
 use async_trait::async_trait;
-use sqlx::{sqlite::SqlitePool, Pool, Sqlite};
+use sqlx::{sqlite::{SqliteConnectOptions, SqlitePoolOptions}, Pool, Sqlite};
+use std::str::FromStr;
+use std::time::Duration;
 
 pub struct SqliteRepository {
     pool: Pool<Sqlite>,
@@ -8,7 +10,29 @@ pub struct SqliteRepository {
 
 impl SqliteRepository {
     pub async fn new(database_url: &str) -> Result<Self, Box<dyn std::error::Error>> {
-        let pool = SqlitePool::connect(database_url).await?;
+
+        let pool = Self::setup_pool(database_url).await?;
+
+        let repo = SqliteRepository { pool };
+
+        repo.run_migrations().await?;
+
+        Ok(repo)
+    }
+
+    async fn setup_pool(url: &str) -> Result<Pool<Sqlite>, sqlx::Error> {
+         let options = SqliteConnectOptions::from_str(url)?
+            .create_if_missing(true)
+            .busy_timeout(Duration::from_secs(5));
+
+        SqlitePoolOptions::new()
+            .max_connections(5)
+            .acquire_timeout(Duration::from_secs(3))
+            .connect_with(options)
+            .await
+    }
+
+    async fn run_migrations(&self) -> Result<(), sqlx::Error> {
         sqlx::query(
             "CREATE TABLE IF NOT EXISTS sensor_types (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -28,7 +52,7 @@ impl SqliteRepository {
                 FOREIGN KEY(sensor_id) REFERENCES sensors(id)
             );"
         )
-        .execute(&pool)
+        .execute(&self.pool)
         .await?;
     
         for t in &[
@@ -39,11 +63,11 @@ impl SqliteRepository {
         ] {
             sqlx::query("INSERT OR IGNORE INTO sensor_types (name) VALUES (?1)")
                 .bind(t.to_string())
-                .execute(&pool)
+                .execute(&self.pool)
                 .await?;
         }
 
-        Ok(SqliteRepository { pool })
+        Ok(())
     }
 }
 
@@ -71,6 +95,7 @@ impl SensorRepository for SqliteRepository {
             .fetch_one(&mut *tx)
             .await
             .map_err(|e| SensorError::DatabaseError(e.to_string()))?;
+
         sqlx::query("INSERT INTO readings (sensor_id, value) VALUES (?1, ?2)")
             .bind(internal_sensor_id)
             .bind(data.value)
