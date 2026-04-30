@@ -1,7 +1,8 @@
 use prost::DecodeError;
 use async_trait::async_trait;
+use strum::Display;
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Clone, Display)]
 pub enum SensorType {
     Temperature,
     Humidity,
@@ -11,6 +12,7 @@ pub enum SensorType {
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct SensorData {
+    pub sensor_id: String,
     pub sensor_type: SensorType,
     pub value: f64,
 }
@@ -18,6 +20,7 @@ pub struct SensorData {
 #[derive(Debug, PartialEq)]
 pub enum SensorError {
     InvalidPayload(String),
+    DatabaseError(String),
 }
 
 impl From<DecodeError> for SensorError {

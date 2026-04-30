@@ -2,29 +2,28 @@ mod domain;
 mod sensor_parser;
 mod mqtt_handler;
 mod mqtt_listener;
+mod sqlite_repository;
 
 use crate::mqtt_handler::MqttHandler;
-use crate::domain::{SensorRepository, SensorData, SensorError};
-use async_trait::async_trait;
+use crate::sqlite_repository::SqliteRepository;
+use std::error::Error;
 
-struct TempRepo;
-
-#[async_trait]
-impl SensorRepository for TempRepo {
-    async fn save_reading(&self, _data: SensorData) -> Result<(), SensorError> {
-        // Implementation for saving sensor reading
-        Ok(())
-    }
-}
 
 #[tokio::main]
-async fn main() {
-    println!("IoT Gateway is starting...");
+async fn main() -> Result<(), Box<dyn Error>> {
+    let (_client, eventloop) = mqtt_listener::setup_mqtt_client(
+        "gateway_prod",
+        "localhost",
+        1883
+    ).await;
 
-    let (_client, eventloop) = mqtt_listener::setup_mqtt_client("gateway", "localhost", 1883).await;
+    let repo = SqliteRepository::new("sqlite:gateway.db").await?;
+    println!("Database initilized (SQLite).");
 
-    let repo = TempRepo;
     let handler = MqttHandler::new(repo);
     
+    println!("Gateway is running...");
     mqtt_listener::run_event_loop(eventloop, handler).await;
+
+    Ok(())
 }

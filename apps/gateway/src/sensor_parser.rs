@@ -28,6 +28,7 @@ pub fn parse_sensor_protobuf(_payload: &[u8]) -> Result<SensorData, SensorError>
     }
 
     Ok(SensorData {
+        sensor_id: proto_reading.id.clone(),
         sensor_type,
         value: proto_reading.value,
     })
@@ -39,7 +40,9 @@ mod tests {
 
     #[test]
     fn test_parse_valid_protobuf() {
+        let sensor_id = "sensor_01".to_string();
         let msg = proto::SensorReading {
+            id: sensor_id.to_string(),
             r#type: proto::SensorType::Temperature as i32,
             value: 22.5,
         };
@@ -50,6 +53,7 @@ mod tests {
         let result = parse_sensor_protobuf(&payload);
 
         let expected = SensorData {
+            sensor_id: sensor_id.to_string(),
             sensor_type: DomainSensorType::Temperature,
             value: 22.5,
         };

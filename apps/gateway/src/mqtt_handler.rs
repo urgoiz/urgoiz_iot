@@ -1,5 +1,4 @@
 use crate::domain::{SensorData, SensorError, SensorRepository};
-use async_trait::async_trait;
 
 pub struct MqttHandler<R: SensorRepository> {
     repository: R,
@@ -31,9 +30,11 @@ mod tests {
     use super::*;
     use crate::domain::SensorType;
     use std::sync::{Arc, Mutex};
+    use async_trait::async_trait;
 
     fn mock_success_parser(_payload: &[u8]) -> Result<SensorData, SensorError> {
         Ok(SensorData {
+            sensor_id: "mqtt_test".to_string(),
             sensor_type: SensorType::Temperature,
             value: 22.5,
         })

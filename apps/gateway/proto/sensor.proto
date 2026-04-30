@@ -10,6 +10,7 @@ enum SensorType {
 }
 
 message SensorReading {
-    SensorType type = 1;
-    double value = 2;
+    string id = 1;
+    SensorType type = 2;
+    double value = 3;
 }

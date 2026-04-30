@@ -68,6 +68,7 @@ mod tests {
         let handler = MqttHandler::new(repo);
 
         let msg = proto::SensorReading {
+            id: "sensor_01".to_string(),
             r#type: proto::SensorType::Temperature as i32,
             value: 25.5,
         };
