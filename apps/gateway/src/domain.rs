@@ -3,7 +3,7 @@ use async_trait::async_trait;
 use strum::Display;
 use serde::{Serialize, Deserialize};
 
-#[derive(Debug, PartialEq, Clone, Display)]
+#[derive(Debug, PartialEq, Clone, Display, Hash, Eq)]
 pub enum SensorType {
     Temperature,
     Humidity,
@@ -35,7 +35,7 @@ pub trait SensorRepository: Send + Sync {
     async fn save_reading(&self, data: SensorData) -> Result<(), SensorError>;
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Hash)]
 pub struct SensorId(String);
 
 impl SensorId {

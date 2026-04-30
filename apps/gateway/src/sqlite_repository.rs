@@ -1,23 +1,65 @@
-use crate::domain::{SensorData, SensorError, SensorRepository, SensorType};
+use crate::domain::{SensorData, SensorError, SensorRepository, SensorType, SensorId};
 use async_trait::async_trait;
 use sqlx::{sqlite::{SqliteConnectOptions, SqlitePoolOptions}, Pool, Sqlite};
 use std::str::FromStr;
 use std::time::Duration;
+use dashmap::DashMap;
 
 pub struct SqliteRepository {
     pool: Pool<Sqlite>,
+    type_cache: DashMap<SensorType, i64>,
+    sensor_cache: DashMap<SensorId, i64>,
 }  
 
 impl SqliteRepository {
     pub async fn new(database_url: &str) -> Result<Self, Box<dyn std::error::Error>> {
 
         let pool = Self::setup_pool(database_url).await?;
-
-        let repo = SqliteRepository { pool };
-
+        let repo = SqliteRepository {
+            pool,
+            type_cache: DashMap::new(),
+            sensor_cache: DashMap::new(),
+        };
         repo.run_migrations().await?;
-
         Ok(repo)
+    }
+
+    async fn get_type_id(&self, tx: &mut sqlx::Transaction<'_, Sqlite>, s_type: SensorType) -> Result<i64, SensorError> {
+        if let Some(id) = self.type_cache.get(&s_type) {
+            return Ok(*id);
+        }
+        let id: i64 = sqlx::query_scalar("SELECT id FROM sensor_types WHERE name = ?1")
+            .bind(s_type.to_string())
+            .fetch_one(&mut **tx)
+            .await
+            .map_err(|e| SensorError::DatabaseError(format!("Type not supported: {}", e)))?;
+        self.type_cache.insert(s_type, id);
+        Ok(id)
+    }
+
+    async fn get_or_create_sensor_id(
+        &self,
+        tx: &mut sqlx::Transaction<'_, Sqlite>,
+        hardware_id: &SensorId,
+        type_id: i64
+    ) -> Result<i64, SensorError> {
+        if let Some(id) = self.sensor_cache.get(hardware_id) {
+            return Ok(*id);
+        }
+        sqlx::query("INSERT OR IGNORE INTO sensors (hardware_id, sensor_type_id) VALUES (?1, ?2)")
+            .bind(hardware_id.as_str())
+            .bind(type_id)
+            .execute(&mut **tx)
+            .await
+            .map_err(|e| SensorError::DatabaseError(e.to_string()))?;
+        
+        let id: i64 = sqlx::query_scalar("SELECT id FROM sensors WHERE hardware_id = ?1")
+            .bind(hardware_id.as_str())
+            .fetch_one(&mut **tx)
+            .await
+            .map_err(|e| SensorError::DatabaseError(e.to_string()))?;
+        self.sensor_cache.insert(hardware_id.clone(), id);
+        Ok(id)
     }
 
     async fn setup_pool(url: &str) -> Result<Pool<Sqlite>, sqlx::Error> {
@@ -77,27 +119,11 @@ impl SensorRepository for SqliteRepository {
         let mut tx = self.pool.begin().await
             .map_err(|e| SensorError::DatabaseError(e.to_string()))?;
 
-        let type_id: i64 = sqlx::query_scalar("SELECT id FROM sensor_types WHERE name = ?1")
-            .bind(data.sensor_type.to_string())
-            .fetch_one(&mut *tx)
-            .await
-            .map_err(|e| SensorError::DatabaseError(format!("Type not supported: {}", e)))?;
-        
-        sqlx::query("INSERT OR IGNORE INTO sensors (hardware_id, sensor_type_id) VALUES (?1, ?2)")
-            .bind(data.sensor_id.as_str())
-            .bind(type_id)
-            .execute(&mut *tx)
-            .await
-            .map_err(|e| SensorError::DatabaseError(e.to_string()))?;
-        
-        let internal_sensor_id: i64 = sqlx::query_scalar("SELECT id FROM sensors WHERE hardware_id = ?1")
-            .bind(data.sensor_id.as_str())
-            .fetch_one(&mut *tx)
-            .await
-            .map_err(|e| SensorError::DatabaseError(e.to_string()))?;
+        let type_id = self.get_type_id(&mut tx, data.sensor_type).await?;
+        let internal_id = self.get_or_create_sensor_id(&mut tx, &data.sensor_id, type_id).await?;
 
         sqlx::query("INSERT INTO readings (sensor_id, value) VALUES (?1, ?2)")
-            .bind(internal_sensor_id)
+            .bind(internal_id)
             .bind(data.value)
             .execute(&mut *tx)
             .await
