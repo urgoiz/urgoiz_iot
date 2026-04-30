@@ -28,13 +28,13 @@ impl<R: SensorRepository> MqttHandler<R> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::domain::SensorType;
+    use crate::domain::{SensorType, SensorId};
     use std::sync::{Arc, Mutex};
     use async_trait::async_trait;
 
     fn mock_success_parser(_payload: &[u8]) -> Result<SensorData, SensorError> {
         Ok(SensorData {
-            sensor_id: "mqtt_test".to_string(),
+            sensor_id: SensorId::new("mqtt_test".to_string()),
             sensor_type: SensorType::Temperature,
             value: 22.5,
         })

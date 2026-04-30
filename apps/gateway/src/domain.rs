@@ -1,6 +1,7 @@
 use prost::DecodeError;
 use async_trait::async_trait;
 use strum::Display;
+use serde::{Serialize, Deserialize};
 
 #[derive(Debug, PartialEq, Clone, Display)]
 pub enum SensorType {
@@ -12,7 +13,7 @@ pub enum SensorType {
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct SensorData {
-    pub sensor_id: String,
+    pub sensor_id: SensorId,
     pub sensor_type: SensorType,
     pub value: f64,
 }
@@ -32,4 +33,17 @@ impl From<DecodeError> for SensorError {
 #[async_trait]
 pub trait SensorRepository: Send + Sync {
     async fn save_reading(&self, data: SensorData) -> Result<(), SensorError>;
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
+pub struct SensorId(String);
+
+impl SensorId {
+    pub fn new(id: impl Into<String>) -> Self {
+        SensorId(id.into())
+    }
+
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
 }

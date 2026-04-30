@@ -1,4 +1,4 @@
-use crate::domain::{SensorData, SensorError, SensorType as DomainSensorType};
+use crate::domain::{SensorData, SensorError, SensorType as DomainSensorType, SensorId};
 use prost::Message;
 
 pub mod proto {
@@ -28,7 +28,7 @@ pub fn parse_sensor_protobuf(_payload: &[u8]) -> Result<SensorData, SensorError>
     }
 
     Ok(SensorData {
-        sensor_id: proto_reading.id.clone(),
+        sensor_id: SensorId::new(proto_reading.id.clone()),
         sensor_type,
         value: proto_reading.value,
     })
@@ -53,7 +53,7 @@ mod tests {
         let result = parse_sensor_protobuf(&payload);
 
         let expected = SensorData {
-            sensor_id: sensor_id.to_string(),
+            sensor_id: SensorId::new(sensor_id),
             sensor_type: DomainSensorType::Temperature,
             value: 22.5,
         };
