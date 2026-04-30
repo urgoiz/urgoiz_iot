@@ -204,4 +204,47 @@ mod tests {
 
         assert_eq!(count, 1);
     }
+
+    #[tokio::test]
+    async fn test_cache_usage() {
+        let repo = setup_test_repo().await;
+        let data = SensorData {
+            sensor_id: SensorId::new("cache_test"),
+            sensor_type: SensorType::Temperature,
+            value: 20.0,
+        };
+
+        repo.save_reading(data.clone()).await.unwrap();
+        assert!(repo.sensor_cache.contains_key(&data.sensor_id));
+
+        let id_first_time = *repo.sensor_cache.get(&data.sensor_id).unwrap();
+
+        repo.save_reading(data.clone()).await.unwrap();
+        let id_second_time = *repo.sensor_cache.get(&data.sensor_id).unwrap();
+
+        assert_eq!(id_first_time, id_second_time);
+    }
+
+    #[tokio::test]
+    async fn test_concurrent_sensor_registration() {
+        use std::sync::Arc;
+        let repo = Arc::new(setup_test_repo().await);
+        let mut handles = vec![];
+
+        for i in 0..20 {
+            let repo_clone = Arc::clone(&repo);
+            handles.push(tokio::spawn(async move {
+                let data = SensorData {
+                    sensor_id: SensorId::new(format!("concurrent_sensor_{}", i)),
+                    sensor_type: SensorType::Temperature,
+                    value: i as f64,
+                };
+                repo_clone.save_reading(data).await
+            }));
+        }
+        for h in handles {
+            let res = h.await.unwrap();
+            assert!(res.is_ok(), "Concurrent save_reading failed: {:?}", res.err());
+        }
+    }
 }
