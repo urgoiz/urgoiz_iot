@@ -4,6 +4,7 @@ use sqlx::{sqlite::{SqliteConnectOptions, SqlitePoolOptions}, Pool, Sqlite};
 use std::str::FromStr;
 use std::time::Duration;
 use dashmap::DashMap;
+use tracing::{info, warn, error, debug};
 
 pub struct SqliteRepository {
     pool: Pool<Sqlite>,
@@ -44,6 +45,7 @@ impl SqliteRepository {
     ) -> Result<Option<i64>, SensorError> {
         let cached_id = self.sensor_cache.get(h_id).map(|id_ref| *id_ref);
         if let Some(id) = cached_id {
+            debug!("Cache hit for sensor");
             let exists: bool = sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM sensors WHERE id = ?1)")
                 .bind(id)
                 .fetch_one(&mut **tx)
@@ -53,6 +55,8 @@ impl SqliteRepository {
                 return Ok(Some(id));
             }
             self.sensor_cache.remove(h_id);
+        } else {
+            debug!("Cache miss for sensor")
         }
         Ok(None)
     }
@@ -161,10 +165,15 @@ impl SqliteRepository {
 #[async_trait]
 impl SensorRepository for SqliteRepository {
     async fn save_reading(&self, data: SensorData) -> Result<(), SensorError> {
-        if let Err(_) = self.execute_save(&data).await {
+        if let Err(e) = self.execute_save(&data).await {
+            warn!(error = %e, "Failed to save reading, invalidating cache and retrying");
             self.invaldate_cache(&data);
-            return self.execute_save(&data).await;
+            return self.execute_save(&data).await.map_err(|e2| {
+                error!(error = %e2, "Retry after cache invalidation also failed");
+                e2
+            });
         }
+        info!(value = data.value, "Successfully saved reading for sensor");
         Ok(())
     }
 }

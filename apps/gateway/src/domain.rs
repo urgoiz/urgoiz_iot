@@ -2,6 +2,7 @@ use prost::DecodeError;
 use async_trait::async_trait;
 use strum::Display;
 use serde::{Serialize, Deserialize};
+use std::fmt;
 
 #[derive(Debug, PartialEq, Clone, Copy, Display, Hash, Eq)]
 pub enum SensorType {
@@ -22,6 +23,15 @@ pub struct SensorData {
 pub enum SensorError {
     InvalidPayload(String),
     DatabaseError(String),
+}
+
+impl fmt::Display for SensorError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            SensorError::InvalidPayload(msg) => write!(f, "Invalid payload: {}", msg),
+            SensorError::DatabaseError(msg) => write!(f, "Database error: {}", msg),
+        }
+    }
 }
 
 impl From<DecodeError> for SensorError {
