@@ -123,13 +123,18 @@ impl SqliteRepository {
     }
 }
 
+impl SqliteRepository{
+    fn invaldate_cache(&self, data: &SensorData) {
+        self.type_cache.remove(&data.sensor_type);
+        self.sensor_cache.remove(&data.sensor_id);
+    }
+}
+
 #[async_trait]
 impl SensorRepository for SqliteRepository {
     async fn save_reading(&self, data: SensorData) -> Result<(), SensorError> {
         if let Err(_) = self.execute_save(&data).await {
-            self.type_cache.remove(&data.sensor_type);
-            self.sensor_cache.remove(&data.sensor_id);
-
+            self.invaldate_cache(&data);
             return self.execute_save(&data).await;
         }
         Ok(())
