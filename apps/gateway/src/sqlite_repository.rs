@@ -44,7 +44,17 @@ impl SqliteRepository {
         type_id: i64
     ) -> Result<i64, SensorError> {
         if let Some(id) = self.sensor_cache.get(hardware_id) {
-            return Ok(*id);
+            let cached_id = *id;
+            drop(id);
+            let exists: bool = sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM sensors WHERE id = ?1)")
+                .bind(cached_id)
+                .fetch_one(&mut **tx)
+                .await
+                .map_err(|e| SensorError::DatabaseError(e.to_string()))?;
+            if exists {
+                return Ok(cached_id);
+            }
+            self.sensor_cache.remove(hardware_id);
         }
         sqlx::query("INSERT OR IGNORE INTO sensors (hardware_id, sensor_type_id) VALUES (?1, ?2)")
             .bind(hardware_id.as_str())
@@ -116,6 +126,18 @@ impl SqliteRepository {
 #[async_trait]
 impl SensorRepository for SqliteRepository {
     async fn save_reading(&self, data: SensorData) -> Result<(), SensorError> {
+        if let Err(_) = self.execute_save(&data).await {
+            self.type_cache.remove(&data.sensor_type);
+            self.sensor_cache.remove(&data.sensor_id);
+
+            return self.execute_save(&data).await;
+        }
+        Ok(())
+    }
+}
+
+impl SqliteRepository {
+async fn execute_save(&self, data: &SensorData) -> Result<(), SensorError> {
         let mut tx = self.pool.begin().await
             .map_err(|e| SensorError::DatabaseError(e.to_string()))?;
 
@@ -247,4 +269,30 @@ mod tests {
             assert!(res.is_ok(), "Concurrent save_reading failed: {:?}", res.err());
         }
     }
+
+    #[tokio::test]
+    async fn test_cache_invalidation_recovery() {
+        let repo = setup_test_repo().await;
+        let sensor_id = SensorId::new("recovering_sensor");
+        let data = SensorData {
+            sensor_id: sensor_id.clone(),
+            sensor_type: SensorType::Temperature,
+            value: 22.0,
+        };
+
+        repo.save_reading(data.clone()).await.unwrap();
+        assert!(repo.sensor_cache.contains_key(&sensor_id));
+
+        sqlx::query("DELETE FROM readings").execute(&repo.pool).await.unwrap();
+        sqlx::query("DELETE FROM sensors WHERE hardware_id = ?1")
+            .bind(sensor_id.as_str())
+            .execute(&repo.pool)
+            .await
+            .unwrap();
+
+        let result = repo.save_reading(data).await;
+
+        assert!(result.is_ok(), "save_reading should succeed even if cache is stale");
+        assert!(repo.sensor_cache.contains_key(&sensor_id));
+    } 
 }

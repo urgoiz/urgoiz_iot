@@ -3,7 +3,7 @@ use async_trait::async_trait;
 use strum::Display;
 use serde::{Serialize, Deserialize};
 
-#[derive(Debug, PartialEq, Clone, Display, Hash, Eq)]
+#[derive(Debug, PartialEq, Clone, Copy, Display, Hash, Eq)]
 pub enum SensorType {
     Temperature,
     Humidity,
