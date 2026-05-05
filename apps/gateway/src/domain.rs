@@ -30,6 +30,12 @@ impl From<DecodeError> for SensorError {
     }
 }
 
+impl From<sqlx::Error> for SensorError {
+    fn from(e: sqlx::Error) -> Self {
+        SensorError::DatabaseError(e.to_string())
+    }
+}
+
 #[async_trait]
 pub trait SensorRepository: Send + Sync {
     async fn save_reading(&self, data: SensorData) -> Result<(), SensorError>;

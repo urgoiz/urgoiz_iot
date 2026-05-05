@@ -37,24 +37,34 @@ impl SqliteRepository {
         Ok(id)
     }
 
+    async fn get_valid_sensor_id(
+        &self,
+        tx: &mut sqlx::Transaction<'_, Sqlite>,
+        h_id: &SensorId
+    ) -> Result<Option<i64>, SensorError> {
+        let cached_id = self.sensor_cache.get(h_id).map(|id_ref| *id_ref);
+        if let Some(id) = cached_id {
+            let exists: bool = sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM sensors WHERE id = ?1)")
+                .bind(id)
+                .fetch_one(&mut **tx)
+                .await?;
+
+            if exists {
+                return Ok(Some(id));
+            }
+            self.sensor_cache.remove(h_id);
+        }
+        Ok(None)
+    }
+
     async fn get_or_create_sensor_id(
         &self,
         tx: &mut sqlx::Transaction<'_, Sqlite>,
         hardware_id: &SensorId,
         type_id: i64
     ) -> Result<i64, SensorError> {
-        if let Some(id) = self.sensor_cache.get(hardware_id) {
-            let cached_id = *id;
-            drop(id);
-            let exists: bool = sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM sensors WHERE id = ?1)")
-                .bind(cached_id)
-                .fetch_one(&mut **tx)
-                .await
-                .map_err(|e| SensorError::DatabaseError(e.to_string()))?;
-            if exists {
-                return Ok(cached_id);
-            }
-            self.sensor_cache.remove(hardware_id);
+        if let Some(id) = self.get_valid_sensor_id(tx, hardware_id).await? {
+            return Ok(id);
         }
         sqlx::query("INSERT OR IGNORE INTO sensors (hardware_id, sensor_type_id) VALUES (?1, ?2)")
             .bind(hardware_id.as_str())
@@ -121,28 +131,13 @@ impl SqliteRepository {
 
         Ok(())
     }
-}
 
-impl SqliteRepository{
     fn invaldate_cache(&self, data: &SensorData) {
         self.type_cache.remove(&data.sensor_type);
         self.sensor_cache.remove(&data.sensor_id);
     }
-}
 
-#[async_trait]
-impl SensorRepository for SqliteRepository {
-    async fn save_reading(&self, data: SensorData) -> Result<(), SensorError> {
-        if let Err(_) = self.execute_save(&data).await {
-            self.invaldate_cache(&data);
-            return self.execute_save(&data).await;
-        }
-        Ok(())
-    }
-}
-
-impl SqliteRepository {
-async fn execute_save(&self, data: &SensorData) -> Result<(), SensorError> {
+    async fn execute_save(&self, data: &SensorData) -> Result<(), SensorError> {
         let mut tx = self.pool.begin().await
             .map_err(|e| SensorError::DatabaseError(e.to_string()))?;
 
@@ -161,6 +156,19 @@ async fn execute_save(&self, data: &SensorData) -> Result<(), SensorError> {
         Ok(())
     }
 }
+
+
+#[async_trait]
+impl SensorRepository for SqliteRepository {
+    async fn save_reading(&self, data: SensorData) -> Result<(), SensorError> {
+        if let Err(_) = self.execute_save(&data).await {
+            self.invaldate_cache(&data);
+            return self.execute_save(&data).await;
+        }
+        Ok(())
+    }
+}
+
 
 #[cfg(test)]
 mod tests {
