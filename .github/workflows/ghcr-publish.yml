@@ -49,10 +49,3 @@ jobs:
           file: ./apps/gateway/Dockerfile
           push: true
           tags: ghcr.io/${{ github.repository_owner }}/iot-gateway:latest
-      - name: Build and push mosquitto
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          file: ./infra/mosquitto
-          push: true
-          tags: ghcr.io/${{ github.repository_owner }}/mosquitto-broker:latest

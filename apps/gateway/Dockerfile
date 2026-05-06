@@ -1,4 +1,4 @@
-FROM ghcr.io/urgoiz/urgoiz_iot/rust-builder:latest as builder
+FROM ghcr.io/urgoiz/urgoiz_iot/rust-builder:latest AS builder
 WORKDIR /app
 COPY . .
 
