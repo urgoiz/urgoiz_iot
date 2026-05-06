@@ -16,6 +16,7 @@ strum ={ version = "0.26", features = ["derive"] }
 dashmap = "5.5"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+config = "0.14"
 
 [build-dependencies]
 prost-build = "0.14.3"
