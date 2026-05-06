@@ -1,0 +1,23 @@
+version '3.8'
+
+services:
+  mosquitto:
+    image: eclipse-mosquitto:2
+    ports:
+      - "1883:1883"
+    volumes:
+      - ./mosquitto/config:/mosquitto/config
+  gateway:
+    build:
+      context: .
+      dockerfile: apps/gateway/Dockerfile
+    depends_on:
+      - mosquitto
+    environment:
+      - RUN:MODE=production
+      - APP__MQTT__HOST=mosquitto
+      - APP__MQTT__PORT=1883
+      - APP__DATABASE__URL=sqlite:/data/iot_prod.db
+      - RUST_LOG=info
+    volumes:
+      - ./data:/data

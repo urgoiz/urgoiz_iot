@@ -2,10 +2,27 @@ version: '3.8'
 
 services:
   mqtt-broker:
-    image: eclipse-mosquitto:latest
+    image: eclipse-mosquitto:2
     container_name: local_mqtt_broker
     ports:
       - "1883:1883"
     volumes:
       - ./mosquitto/config/mosquitto.conf:/mosquitto/config/mosquitto.conf
+    restart: unless-stopped
+
+  gateway:
+    build:
+      context: ..
+      dockerfile: apps/gateway/Dockerfile
+    container_name: urgoiz_gateway
+    depends_on:
+      - mqtt-broker
+    environment:
+      - RUN_MODE=production
+      - APP__MQTT__HOST=mqtt-broker
+      - APP__MQTT__PORT=1883
+      - APP__DATABASE__URL=sqlite:/data/iot_prod.db
+      - RUST_LOG=info
+    volumes:
+      - ../data:/data
     restart: unless-stopped

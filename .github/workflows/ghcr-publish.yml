@@ -10,7 +10,7 @@ env:
   REGISTRY: ghcr.io
 
 jobs:
-  build-rust:
+  test-rust:
     runs-on: ubuntu-latest
     container:
       image: ghcr.io/${{ github.repository_owner }}/rust-builder:latest
@@ -28,7 +28,8 @@ jobs:
       - name: Run Tests
         run: cargo test --workspace --release
 
-  publish-mosquitto:
+  publish-images:
+    needs: test-rust
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -41,9 +42,17 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      - name: Build and push Mosquitto
+      - name: Build and push Gateway
         uses: docker/build-push-action@v6
         with:
-          context: ./infra/mosquitto
+          context: .
+          file: ./apps/gateway/Dockerfile
+          push: true
+          tags: ghcr.io/${{ github.repository_owner }}/iot-gateway:latest
+      - name: Build and push mosquitto
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./infra/mosquitto
           push: true
           tags: ghcr.io/${{ github.repository_owner }}/mosquitto-broker:latest
