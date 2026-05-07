@@ -52,7 +52,7 @@ jobs:
       - name: Build and push Mosquitto (Custom)
         uses: docker/build-push-action@v6
         with:
-          context: .
+          context: ./infra/mosquitto
           file: ./infra/mosquitto/Dockerfile
           push: true
           tags: ghcr.io/${{ github.repository_owner }}/iot-mosquitto:latest
