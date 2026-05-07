@@ -2,10 +2,14 @@ use thiserror::Error;
 
 #[derive(Error, Debug)]
 pub enum GatewayError {
-    #[error("MQTT connection error: {0}")]
-    MqttConnection(String),
+    #[error("Invalid configuration: {0}")]
+    Config(String),
     #[error("Database error: {0}")]
     Database(#[from] sqlx::Error),
-    #[error("Invalid message format: {0}")]
-    InvalidMessage(String),
+    #[error("MQTT network error: {0}")]
+    Network(#[from] rumqttc::ClientError),
+    #[error("Protobuf decoding error: {0}")]
+    Decod(#[from] prost::DecodeError),
+    #[error("Invalid sensor data: {0}")]
+    InvalidData(String),
 }
