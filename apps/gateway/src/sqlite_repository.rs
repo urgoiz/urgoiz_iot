@@ -1,10 +1,11 @@
-use crate::domain::{SensorData, SensorError, SensorRepository, SensorType, SensorId};
+use crate::domain::{SensorData, SensorRepository, SensorType, SensorId};
 use async_trait::async_trait;
 use sqlx::{sqlite::{SqliteConnectOptions, SqlitePoolOptions}, Pool, Sqlite};
 use std::str::FromStr;
 use std::time::Duration;
 use dashmap::DashMap;
 use tracing::{info, warn, error, debug};
+use crate::error::{GatewayError, GatewayResult};
 
 pub struct SqliteRepository {
     pool: Pool<Sqlite>,
@@ -25,7 +26,7 @@ impl SqliteRepository {
         Ok(repo)
     }
 
-    async fn get_type_id(&self, tx: &mut sqlx::Transaction<'_, Sqlite>, s_type: SensorType) -> Result<i64, SensorError> {
+    async fn get_type_id(&self, tx: &mut sqlx::Transaction<'_, Sqlite>, s_type: SensorType) -> Result<i64, GatewayError> {
         if let Some(id) = self.type_cache.get(&s_type) {
             return Ok(*id);
         }
@@ -33,7 +34,7 @@ impl SqliteRepository {
             .bind(s_type.to_string())
             .fetch_one(&mut **tx)
             .await
-            .map_err(|e| SensorError::DatabaseError(format!("Type not supported: {}", e)))?;
+            .map_err(|e| GatewayError::DatabaseError(format!("Type not supported: {}", e)))?;
         self.type_cache.insert(s_type, id);
         Ok(id)
     }
@@ -42,7 +43,7 @@ impl SqliteRepository {
         &self,
         tx: &mut sqlx::Transaction<'_, Sqlite>,
         h_id: &SensorId
-    ) -> Result<Option<i64>, SensorError> {
+    ) -> Result<Option<i64>, GatewayError> {
         let cached_id = self.sensor_cache.get(h_id).map(|id_ref| *id_ref);
         if let Some(id) = cached_id {
             debug!("Cache hit for sensor");
@@ -66,7 +67,7 @@ impl SqliteRepository {
         tx: &mut sqlx::Transaction<'_, Sqlite>,
         hardware_id: &SensorId,
         type_id: i64
-    ) -> Result<i64, SensorError> {
+    ) -> Result<i64, GatewayError> {
         if let Some(id) = self.get_valid_sensor_id(tx, hardware_id).await? {
             return Ok(id);
         }
@@ -75,13 +76,13 @@ impl SqliteRepository {
             .bind(type_id)
             .execute(&mut **tx)
             .await
-            .map_err(|e| SensorError::DatabaseError(e.to_string()))?;
+            .map_err(|e| GatewayError::DatabaseError(e.to_string()))?;
         
         let id: i64 = sqlx::query_scalar("SELECT id FROM sensors WHERE hardware_id = ?1")
             .bind(hardware_id.as_str())
             .fetch_one(&mut **tx)
             .await
-            .map_err(|e| SensorError::DatabaseError(e.to_string()))?;
+            .map_err(|e| GatewayError::DatabaseError(e.to_string()))?;
         self.sensor_cache.insert(hardware_id.clone(), id);
         Ok(id)
     }
@@ -141,9 +142,9 @@ impl SqliteRepository {
         self.sensor_cache.remove(&data.sensor_id);
     }
 
-    async fn execute_save(&self, data: &SensorData) -> Result<(), SensorError> {
+    async fn execute_save(&self, data: &SensorData) -> Result<(), GatewayError> {
         let mut tx = self.pool.begin().await
-            .map_err(|e| SensorError::DatabaseError(e.to_string()))?;
+            .map_err(|e| GatewayError::DatabaseError(e.to_string()))?;
 
         let type_id = self.get_type_id(&mut tx, data.sensor_type).await?;
         let internal_id = self.get_or_create_sensor_id(&mut tx, &data.sensor_id, type_id).await?;
@@ -153,10 +154,10 @@ impl SqliteRepository {
             .bind(data.value)
             .execute(&mut *tx)
             .await
-            .map_err(|e| SensorError::DatabaseError(e.to_string()))?;
+            .map_err(|e| GatewayError::DatabaseError(e.to_string()))?;
 
         tx.commit().await
-            .map_err(|e| SensorError::DatabaseError(e.to_string()))?;
+            .map_err(|e| GatewayError::DatabaseError(e.to_string()))?;
         Ok(())
     }
 }
@@ -164,7 +165,7 @@ impl SqliteRepository {
 
 #[async_trait]
 impl SensorRepository for SqliteRepository {
-    async fn save_reading(&self, data: SensorData) -> Result<(), SensorError> {
+    async fn save_reading(&self, data: SensorData) -> GatewayResult<()> {
         if let Err(e) = self.execute_save(&data).await {
             warn!(error = %e, "Failed to save reading, invalidating cache and retrying");
             self.invaldate_cache(&data);

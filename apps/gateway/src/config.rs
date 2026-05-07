@@ -16,7 +16,6 @@ pub struct DatabaseSettings {
 pub struct MqttSettings {
     pub host: String,
     pub port: u16,
-    pub topic: String,
 }
 
 
@@ -47,7 +46,6 @@ impl Settings {
             mqtt: MqttSettings {
                 host: "localhost".into(),
                 port: 1883,
-                topic: "test/#".into(),
             },
         }
     }

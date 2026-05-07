@@ -4,6 +4,7 @@ mod mqtt_handler;
 mod mqtt_listener;
 mod sqlite_repository;
 mod config;
+mod error;
 
 use crate::mqtt_handler::MqttHandler;
 use config::Settings;
@@ -25,10 +26,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
     setup_tracing();
     tracing::info!("Starting IoT Gateway...");
 
-    let settings = Settings::new().map_err(|e| {
-        tracing::error!("Failed to load configuration: {}", e);
-        e
-    })?;
+    let settings = Settings::new()?;
 
     tracing ::info!("Configuration loaded: {:?}", settings);
 
@@ -40,7 +38,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         })?;
     tracing::info!("Database initialized at {}:", settings.database.url);
 
-        let (_client, eventloop) = mqtt_listener::setup_mqtt_client(
+    let (client, eventloop) = mqtt_listener::setup_mqtt_client(
         "gateway_prod",
         &settings.mqtt.host,
         settings.mqtt.port
@@ -48,11 +46,21 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     let handler = MqttHandler::new(repo);
     
-    tracing::info!("Gateway is running and listening for events...");
-    if let Err(e) = mqtt_listener::run_event_loop(eventloop, handler).await {
-        tracing::error!("Event loop terminated with error: {}", e);
-        return Err(e);
+    tracing::info!("Gateway is ready. Press Ctrl+C to exit.");
+
+    tokio::select! {
+        result = mqtt_listener::run_event_loop(eventloop, handler) => {
+            if let Err(e) = result {
+                tracing::error!("Event loop stopped due to fatal error: {}", e);
+                return Err(e);
+            }
+        }
+        _ = tokio::signal::ctrl_c() => {
+            tracing::info!("Shutdown signal received, exiting...");
+            client.disconnect().await?;
+        }
     }
+    tracing::info!("IoT Gateway has shut down gracefully.");
 
     Ok(())
 }

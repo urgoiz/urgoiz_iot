@@ -1,8 +1,7 @@
-use prost::DecodeError;
 use async_trait::async_trait;
 use strum::Display;
 use serde::{Serialize, Deserialize};
-use std::fmt;
+
 
 #[derive(Debug, PartialEq, Clone, Copy, Display, Hash, Eq)]
 pub enum SensorType {
@@ -19,36 +18,9 @@ pub struct SensorData {
     pub value: f64,
 }
 
-#[derive(Debug, PartialEq)]
-pub enum SensorError {
-    InvalidPayload(String),
-    DatabaseError(String),
-}
-
-impl fmt::Display for SensorError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            SensorError::InvalidPayload(msg) => write!(f, "Invalid payload: {}", msg),
-            SensorError::DatabaseError(msg) => write!(f, "Database error: {}", msg),
-        }
-    }
-}
-
-impl From<DecodeError> for SensorError {
-    fn from(err: DecodeError) -> Self {
-        SensorError::InvalidPayload(format!("Protobuf decode error: {}", err))
-    }
-}
-
-impl From<sqlx::Error> for SensorError {
-    fn from(e: sqlx::Error) -> Self {
-        SensorError::DatabaseError(e.to_string())
-    }
-}
-
 #[async_trait]
 pub trait SensorRepository: Send + Sync {
-    async fn save_reading(&self, data: SensorData) -> Result<(), SensorError>;
+    async fn save_reading(&self, data: SensorData) -> Result<(), crate::error::GatewayError>;
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Hash)]

@@ -1,6 +1,7 @@
-use crate::domain::{SensorData, SensorError, SensorType as DomainSensorType, SensorId};
+use crate::domain::{SensorData, SensorType as DomainSensorType, SensorId};
 use prost::Message;
 use std::convert::TryFrom;
+use crate::error::{GatewayError, GatewayResult};
 
 pub mod proto {
     include!(concat!(env!("OUT_DIR"), "/iot.rs"));
@@ -18,14 +19,14 @@ impl From<proto::SensorType> for DomainSensorType {
 }
 
 impl TryFrom<proto::SensorReading> for SensorData {
-    type Error = SensorError;
+    type Error = GatewayError;
 
     fn try_from(proto: proto::SensorReading) -> Result<Self, Self::Error> {
         let sensor_type = proto::SensorType::try_from(proto.r#type)
             .map(DomainSensorType::from)
             .unwrap_or(DomainSensorType::Unknown);
         if sensor_type == DomainSensorType::Unknown {
-            return Err(SensorError::InvalidPayload("Invalid sensor type".into()));
+            return Err(GatewayError::InvalidData("Invalid sensor type".into()));
         }
         Ok(SensorData {
             sensor_id: SensorId::new(proto.id),
@@ -35,9 +36,8 @@ impl TryFrom<proto::SensorReading> for SensorData {
     }
 }
 
-pub fn parse_sensor_protobuf(_payload: &[u8]) -> Result<SensorData, SensorError> {
-    let proto_reading = proto::SensorReading::decode(_payload).
-        map_err(|e| SensorError::InvalidPayload(format!("Protobuf decoding error: {}", e)))?;
+pub fn parse_sensor_protobuf(_payload: &[u8]) -> GatewayResult<SensorData> {
+    let proto_reading = proto::SensorReading::decode(_payload)?;
     SensorData::try_from(proto_reading)
 }
 
@@ -74,6 +74,6 @@ mod tests {
 
         let result = parse_sensor_protobuf(&payload);
 
-        assert!(matches!(result, Err(SensorError::InvalidPayload(_))));
+        assert!(matches!(result, Err(GatewayError::DecodeError(_))));
     }
 }

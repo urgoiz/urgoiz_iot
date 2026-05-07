@@ -1,4 +1,5 @@
-use crate::domain::{SensorData, SensorError, SensorRepository};
+use crate::domain::{SensorData, SensorRepository};
+use crate::error::GatewayError;
 
 pub struct MqttHandler<R: SensorRepository> {
     repository: R,
@@ -12,15 +13,15 @@ impl<R: SensorRepository> MqttHandler<R> {
     pub async fn handle_message(
         &self,
         payload: &[u8],
-        parser_fn: fn(&[u8]) -> Result<SensorData, SensorError>,
-    ) -> Result<(), String> {
+        parser_fn: fn(&[u8]) -> Result<SensorData, GatewayError>,
+    ) -> Result<(), GatewayError> {
         let data = parser_fn(payload)
-            .map_err(|e| format!("Failed to parse sensor data | Reason: {:?}", e))?;
+            .map_err(|e| GatewayError::InvalidData(format!("{:?}", e)))?;
 
         self.repository
             .save_reading(data)
             .await
-            .map_err(|e| format!("Database error | Reason: {:?}", e))?;
+            .map_err(|e| GatewayError::DatabaseError(format!("{:?}", e)))?;
         Ok(())
     }
 }
@@ -32,7 +33,7 @@ mod tests {
     use std::sync::{Arc, Mutex};
     use async_trait::async_trait;
 
-    fn mock_success_parser(_payload: &[u8]) -> Result<SensorData, SensorError> {
+    fn mock_success_parser(_payload: &[u8]) -> Result<SensorData, GatewayError> {
         Ok(SensorData {
             sensor_id: SensorId::new("mqtt_test".to_string()),
             sensor_type: SensorType::Temperature,
@@ -40,8 +41,8 @@ mod tests {
         })
     }
 
-    fn mock_fail_parser(_payload: &[u8]) -> Result<SensorData, SensorError> {
-        Err(SensorError::InvalidPayload("Cannot parse".to_string()))
+    fn mock_fail_parser(_payload: &[u8]) -> Result<SensorData, GatewayError> {
+        Err(GatewayError::InvalidData("Cannot parse".to_string()))
     }
 
     #[tokio::test]
@@ -67,7 +68,7 @@ mod tests {
         let result = handler.handle_message(b"error_reading", mock_fail_parser).await;
         
         assert!(result.is_err());
-        assert!(result.unwrap_err().contains("Failed to parse sensor data"));
+        assert!(matches!(result, Err(GatewayError::InvalidData(_))));
     }
 
     struct MockRepository {
@@ -76,7 +77,7 @@ mod tests {
 
     #[async_trait]
     impl SensorRepository for MockRepository {
-        async fn save_reading(&self, data: SensorData) -> Result<(), SensorError> {
+        async fn save_reading(&self, data: SensorData) -> Result<(), GatewayError> {
             self.saved_data.lock().unwrap().push(data.clone());
             Ok(())
         }

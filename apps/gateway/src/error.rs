@@ -1,15 +1,23 @@
 use thiserror::Error;
 
-#[derive(Error, Debug)]
+#[derive(Error, Debug, PartialEq)]
 pub enum GatewayError {
     #[error("Invalid configuration: {0}")]
-    Config(String),
+    _ConfigError(String),
     #[error("Database error: {0}")]
-    Database(#[from] sqlx::Error),
+    DatabaseError(String),
     #[error("MQTT network error: {0}")]
-    Network(#[from] rumqttc::ClientError),
+    _NetworkError(String),
     #[error("Protobuf decoding error: {0}")]
-    Decod(#[from] prost::DecodeError),
-    #[error("Invalid sensor data: {0}")]
+    DecodeError(#[from] prost::DecodeError),
+    #[error("Invalid or corrupt sensor data: {0}")]
     InvalidData(String),
 }
+
+impl From<sqlx::Error> for GatewayError {
+    fn from(err: sqlx::Error) -> Self {
+        GatewayError::DatabaseError(err.to_string())
+    }
+}
+
+pub type GatewayResult<T> = Result<T, GatewayError>;

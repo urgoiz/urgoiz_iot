@@ -5,6 +5,7 @@ use crate::domain::SensorRepository;
 use crate::mqtt_handler::MqttHandler;
 use crate::sensor_parser::parse_sensor_protobuf;
 use std::error::Error;
+use crate::error::GatewayError;
 
 pub async fn setup_mqtt_client(client_id: &str, host: &str, port: u16) -> (AsyncClient, EventLoop) {
     let mut mqttoptions = MqttOptions::new(client_id, host, port);
@@ -45,7 +46,7 @@ mod tests {
     use super::*;
     use std::sync::{Arc, Mutex};
     use async_trait::async_trait;
-    use crate::domain::{SensorData, SensorError, SensorType};
+    use crate::domain::{SensorData, SensorType};
     use crate::sensor_parser::proto;
     use prost::Message;
 
@@ -55,7 +56,7 @@ mod tests {
 
     #[async_trait]
     impl SensorRepository for MockRepo {
-        async fn save_reading(&self, data: SensorData) -> Result<(), SensorError> {
+        async fn save_reading(&self, data: SensorData) -> Result<(), GatewayError> {
             self.data.lock().unwrap().push(data);
             Ok(())
         }
