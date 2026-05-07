@@ -1,6 +1,7 @@
 use crate::domain::{SensorData, SensorRepository};
 use crate::error::GatewayError;
 
+#[derive(Clone)]
 pub struct MqttHandler<R: SensorRepository> {
     repository: R,
 }

@@ -6,6 +6,7 @@ use std::time::Duration;
 use dashmap::DashMap;
 use tracing::{info, warn, error, debug};
 use crate::error::{GatewayError, GatewayResult};
+use std::sync::Arc;
 
 pub struct SqliteRepository {
     pool: Pool<Sqlite>,
@@ -176,6 +177,13 @@ impl SensorRepository for SqliteRepository {
         }
         info!(value = data.value, "Successfully saved reading for sensor");
         Ok(())
+    }
+}
+
+#[async_trait::async_trait]
+impl SensorRepository for Arc<SqliteRepository> {
+    async fn save_reading(&self, data: SensorData) -> crate::error::GatewayResult<()> {
+        self.as_ref().save_reading(data).await
     }
 }
 
