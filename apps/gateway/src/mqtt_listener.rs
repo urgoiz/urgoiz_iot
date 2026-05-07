@@ -4,6 +4,7 @@ use std::time::Duration;
 use crate::domain::SensorRepository;
 use crate::mqtt_handler::MqttHandler;
 use crate::sensor_parser::parse_sensor_protobuf;
+use std::error::Error;
 
 pub async fn setup_mqtt_client(client_id: &str, host: &str, port: u16) -> (AsyncClient, EventLoop) {
     let mut mqttoptions = MqttOptions::new(client_id, host, port);
@@ -12,28 +13,28 @@ pub async fn setup_mqtt_client(client_id: &str, host: &str, port: u16) -> (Async
     let (client, eventloop) = AsyncClient::new(mqttoptions, 10);
 
     client.subscribe("garden/sensors/#", QoS::AtMostOnce).await.unwrap();
-    println!("Subscribed to 'garden/sensors/#'. Waiting for data...");
+    tracing::info!("Subscribed to 'garden/sensors/#'. Waiting for data...");
 
     (client, eventloop)
 }
 
 pub async fn run_event_loop<R: SensorRepository>(
     mut event: EventLoop,
-    handler: MqttHandler<R>,) {
+    handler: MqttHandler<R>,) -> Result<(), Box<dyn Error>> {
     loop {
-        match event.poll().await {
-            Ok(Event::Incoming(Packet::Publish(packet))) => {
+        match event.poll().await? {
+            Event::Incoming(Packet::Publish(packet)) => {
                 if let Err(e) = handler.handle_message(&packet.payload, parse_sensor_protobuf).await {
-                    eprintln!("ERROR | {}", e);
+                    tracing::error!("ERROR | {}", e);
                 } else {
-                    println!("SUCCESS | Message processed and stored.");
+                    tracing::info!("SUCCESS | Message processed and stored.");
                 }
             }
-            Ok(_) => {}
-            Err(e) => {
-                eprintln!("MQTT connection error: {:?}", e);
-                tokio::time::sleep(Duration::from_secs(1)).await;
+            Event::Incoming(Packet::Disconnect) => {
+                tracing::warn!("MQTT disconnected by broker");
+                return Err("MQTT disconnected".into());
             }
+            _ => {}
         }
     }
 }

@@ -6,9 +6,9 @@ mod sqlite_repository;
 mod config;
 
 use crate::mqtt_handler::MqttHandler;
+use config::Settings;
 use std::error::Error;
 use tracing_subscriber::{prelude::*, EnvFilter};
-use config::Settings;
 
 
 fn setup_tracing() {
@@ -21,25 +21,38 @@ fn setup_tracing() {
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
-    let (_client, eventloop) = mqtt_listener::setup_mqtt_client(
-        "gateway_prod",
-        "localhost",
-        1883
-    ).await;
 
     setup_tracing();
-    let settings = Settings::new().expect("Failed to load configuration");
+    tracing::info!("Starting IoT Gateway...");
+
+    let settings = Settings::new().map_err(|e| {
+        tracing::error!("Failed to load configuration: {}", e);
+        e
+    })?;
+
     tracing ::info!("Configuration loaded: {:?}", settings);
 
     let repo = sqlite_repository::SqliteRepository::new(&settings.database.url)
         .await
-        .expect("Failed to initialize database");
-    tracing::info!("Database initialized (SQLite).");
+        .map_err(|e| {
+            tracing::error!("Database initialization failed: {}", e);
+            e
+        })?;
+    tracing::info!("Database initialized at {}:", settings.database.url);
+
+        let (_client, eventloop) = mqtt_listener::setup_mqtt_client(
+        "gateway_prod",
+        &settings.mqtt.host,
+        settings.mqtt.port
+    ).await;
 
     let handler = MqttHandler::new(repo);
     
-    tracing::info!("Gateway is running...");
-    mqtt_listener::run_event_loop(eventloop, handler).await;
+    tracing::info!("Gateway is running and listening for events...");
+    if let Err(e) = mqtt_listener::run_event_loop(eventloop, handler).await {
+        tracing::error!("Event loop terminated with error: {}", e);
+        return Err(e);
+    }
 
     Ok(())
 }
